@@ -30,7 +30,7 @@ namespace wp
       bm = new Bitmap(width, height);
       g = Graphics.FromImage(bm);
       g.Clear(Color.White);
-      p = new Pen(Color.Blue);
+      p = new Pen(Color.Black, 2);
       axis_pen = new Pen(Color.Black);
       //axis_draw();
       x0 = 0;
@@ -81,13 +81,13 @@ namespace wp
     {
       RenderModule rd = new RenderModule(110, 100, height, width);
 
-      rd.add(new Parallelepiped(-30, 10, 10, 40, 60, 100));
-
+      //rd.add(new Parallelepiped(-30, 10, 10, 40, 60, 100));
+      rd.add(new Cylinder(10, 10, 10, 100, 30));
       //rd.add(new Parallelepiped(10, 0, 110, 20, 200, 30));
 
-      rd.transform_all(Matrix.T(-100, -100, -100));
+
       rd.transform_all(  Matrix.R_y(Math.PI * Convert.ToDouble(textBox1.Text.Replace('.', ',')) * 1 / 4) * Matrix.R_x(Math.PI * 1 / 16));
-      rd.transform_all(Matrix.T(100, 100, 100));
+
       rd.draw_all(g, p);
       pictureBox1.Image = bm;
     }

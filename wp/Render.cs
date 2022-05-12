@@ -278,7 +278,6 @@ namespace wp
     protected List<Point3d> points;
     protected List<Line> lines;
 
-    public abstract List<Line> find_lines(Line line);
     public bool point_find(Point3d point)
     {
       foreach (var line in lines)
@@ -298,15 +297,162 @@ namespace wp
           result = !result;
         j = i;
       }
-      //
 
-      //Point3d p = new Point3d(int.MaxValue, point.y);
-      //Line l =  new Line(_first)
-      //foreach(var line in lines)
-      //{
-      //  (isIntersec, point) = line()
-      //}
       return result;
+    }
+
+    public List<Line> find_lines(Line line)
+    {
+      List<Line> res = new List<Line>();
+
+      foreach (var l in lines)
+      {
+        if (l == line)
+        {
+          res.Add(line);
+          return res;
+        }
+      }
+
+      bool added = false;
+
+      int num = 0;
+      if (point_find(line.Pa))
+        num++;
+      if (point_find(line.Pb))
+        num++;
+
+
+      if (num == 2)
+      {
+        added = true;
+        var (nonNullC, z1) = find_z(line.Pa.x, line.Pa.y);
+        var (_, z2) = find_z(line.Pb.x, line.Pb.y);
+        if (!nonNullC || (z1 >= line.Pa.z && z2 >= line.Pb.z))
+        {
+          res.Add(line);
+          return res;
+        }
+      }
+
+      if (num == 0)
+      {
+        int n = 0;
+        added = true;
+        List<Point3d> inter_points = new List<Point3d>();
+        foreach (var l in lines)
+        {
+          var (isIntersec, point) = l.intersect(line);
+          if (isIntersec && point == null)
+          {
+            res.Add(line);
+            return res;
+          }
+
+          if (isIntersec && point != null)
+          {
+            inter_points.Add(point);
+            n++;
+          }
+        }
+
+        if (n >= 2)
+        {
+
+          var (nonNullC, z1) = find_z(inter_points[0].x, inter_points[0].y);
+          var (_, z2) = find_z(inter_points[1].x, inter_points[1].y);
+
+          int z_line1 = line.find_z(inter_points[0].x, inter_points[0].y);
+          int z_line2 = line.find_z(inter_points[1].x, inter_points[1].y);
+
+          inter_points[0].z = z_line1;
+          inter_points[1].z = z_line2;
+
+          if (z_line1 < z1 && z_line2 < z2)
+          {
+            res.Add(line);
+            return res;
+          }
+          else
+          {
+            if (Point3d.dist(line.Pa, inter_points[0]) < Point3d.dist(line.Pa, inter_points[1]))
+            {
+              if (Point3d.dist(line.Pa, inter_points[0]) > 1e-5)
+                res.Add(new Line(line.Pa, inter_points[0]));
+              if (Point3d.dist(line.Pb, inter_points[1]) > 1e-5)
+                res.Add(new Line(line.Pb, inter_points[1]));
+            }
+            else
+            {
+              if (Point3d.dist(line.Pa, inter_points[1]) > 1e-5)
+                res.Add(new Line(line.Pa, inter_points[1]));
+              if (Point3d.dist(line.Pb, inter_points[0]) > 1e-5)
+                res.Add(new Line(line.Pb, inter_points[0]));
+            }
+          }
+        }
+        else
+        {
+          res.Add(line);
+          return res;
+        }
+      }
+
+      if (num == 1)
+      {
+        added = true;
+        Point3d outs_point = !point_find(line.Pa) ? line.Pa : line.Pb;
+        Point3d in_point = point_find(line.Pa) ? line.Pa : line.Pb;
+        if (in_point == outs_point)
+          throw new Exception("Same points");
+
+        bool isIntersec = false;
+        Point3d point = null, true_point = null;
+        foreach (var l in lines)
+        {
+          Point3d local_point;
+          (isIntersec, local_point) = l.intersect(line);
+          if (isIntersec && local_point != null)
+          {
+            point = local_point;
+            if (!(point.x == in_point.x && point.y == in_point.y))
+              true_point = point;
+          }
+
+
+        }
+
+        if (point == null || true_point == null)
+        {
+
+          res.Add(line);
+          return res;
+        }
+
+        if (true_point != null)
+        {
+          point = true_point;
+          var (NonNullC, z) = find_z(point.x, point.y);
+
+          int z_line = line.find_z(point.x, point.y);
+          point.z = z_line;
+
+          if (z_line <= z)
+          {
+            res.Add(line);
+            return res;
+          }
+          else
+          {
+            if (Point3d.dist(outs_point, point) > 1e-5)
+              res.Add(new Line(outs_point, point));
+            return res;
+          }
+        }
+        //throw new Exception("a");
+      }
+
+      return res;
     }
 
     private (double, double, double) get_coef()
@@ -320,9 +466,11 @@ namespace wp
 
       Point3d first, second, third;
 
+
+      int shift = points.Count / 3;
       first = points[0];
-      second = points[1];
-      third = points[2];
+      second = points[shift];
+      third = points[2 * shift];
 
       (mat[0, 0], mat[0, 1], mat[0, 2]) = (first.x, first.y, first.z);
       (mat[1, 0], mat[1, 1], mat[1, 2]) = (second.x, second.y, second.z);
@@ -356,178 +504,26 @@ namespace wp
   class Face : Poly
   {
     
-    //clockwise
     public Face(Point3d vertex1, Point3d vertex2, Point3d vertex3, Point3d vertex4)
     {
       points = new List<Point3d> { vertex1, vertex2, vertex3, vertex4 };
       lines = new List<Line> { new Line(vertex1, vertex2), new Line(vertex2, vertex3), new Line(vertex3, vertex4), new Line(vertex4, vertex1) };
     }
 
+  }
 
-    public override List<Line> find_lines(Line line)
+  class Circle : Poly
+  {
+    public Circle(List<Point3d> _points)
     {
-      List<Line> res = new List<Line>();
-      //res.Add(line);
-      // if they laying in 
-
-      foreach(var l in lines)
+      points = _points;
+      int size = points.Count;
+      lines = new List<Line>(size);
+      for(int i = 0; i < size; ++i)
       {
-        if(l == line)
-        {
-          res.Add(line);
-          return res;
-        }
+        lines.Add(new Line(points[(i) % size], points[(i + 1) % size]));
       }
-
-      bool added = false;
-
-      int num = 0;
-      if (point_find(line.Pa))
-        num++;
-      if (point_find(line.Pb))
-        num++;
-
-
-      if (num == 2)
-      {
-        added = true;
-        var (nonNullC, z1) = find_z(line.Pa.x, line.Pa.y);
-        var (_, z2) = find_z(line.Pb.x, line.Pb.y);
-        if (!nonNullC || (z1 >= line.Pa.z && z2 >= line.Pb.z))
-        {
-          res.Add(line);
-          return res;
-        }
-      }
-
-      if(num == 0)
-      {
-        int n = 0;
-        added = true;
-        List<Point3d> inter_points = new List<Point3d>(); 
-        foreach (var l in lines)
-        {
-          var (isIntersec, point) = l.intersect(line);
-          if (isIntersec && point == null)
-          {
-            res.Add(line);
-            return res;
-          }
-
-          if(isIntersec && point != null)
-          {
-            inter_points.Add(point);
-            n++;
-          }
-        }
-
-        if (n >= 2)
-        {
-          
-          var (nonNullC, z1) = find_z(inter_points[0].x, inter_points[0].y);
-          var (_, z2) = find_z(inter_points[1].x, inter_points[1].y);
-
-          int z_line1 = line.find_z(inter_points[0].x, inter_points[0].y);
-          int z_line2 = line.find_z(inter_points[1].x, inter_points[1].y);
-
-          inter_points[0].z = z_line1;
-          inter_points[1].z = z_line2;
-
-          if (z_line1 < z1 && z_line2 < z2)
-          {
-            res.Add(line);
-            return res;
-          }
-          else
-          {
-            if(Point3d.dist(line.Pa, inter_points[0]) < Point3d.dist(line.Pa, inter_points[1]))
-            {
-              if (Point3d.dist(line.Pa, inter_points[0]) > 1e-5)
-                res.Add(new Line(line.Pa, inter_points[0]));
-              if (Point3d.dist(line.Pb, inter_points[1]) > 1e-5)
-                res.Add(new Line(line.Pb, inter_points[1]));
-            }
-            else
-            {
-              if (Point3d.dist(line.Pa, inter_points[1]) > 1e-5)
-                res.Add(new Line(line.Pa, inter_points[1]));
-              if (Point3d.dist(line.Pb, inter_points[0]) > 1e-5)
-                res.Add(new Line(line.Pb, inter_points[0]));
-            }
-          }
-        }
-        else
-        {
-          res.Add(line);
-          return res;
-        }
-      }
-
-      if (num == 1)
-      {
-        added = true;
-        Point3d outs_point = !point_find(line.Pa) ? line.Pa : line.Pb;
-        Point3d in_point = point_find(line.Pa) ? line.Pa : line.Pb;
-        if (in_point == outs_point)
-          throw new Exception("Same points");
-
-        bool isIntersec = false;
-        Point3d point =  null, true_point = null;
-        foreach (var l in lines)
-        {
-          Point3d local_point;
-          (isIntersec, local_point) = l.intersect(line);
-          if(isIntersec && local_point != null)
-          {
-            point = local_point;
-            if (!(point.x == in_point.x && point.y == in_point.y))
-              true_point = point;
-          }
-
-          
-        }
-
-        if (point == null || true_point == null)
-        {
-
-          res.Add(line);
-          return res;
-        }
-
-        if (true_point != null)
-        {
-          point = true_point;
-          var (NonNullC, z) = find_z(point.x, point.y);
-
-          int z_line = line.find_z(point.x, point.y);
-          point.z = z_line;
-
-          if (z_line <= z)
-          {
-            res.Add(line);
-            return res;
-          }
-          else
-          {
-            if (Point3d.dist(outs_point, point) > 1e-5)
-              res.Add(new Line(outs_point, point));
-            return res;
-          }
-        }
-        //throw new Exception("a");
-      }
-
-      if (!added)
-      {
-        throw new Exception("B");
-        //res.Add(line);
-      }
-      return res;
     }
-    //public int find_z_val(int x, int y)
-    //{
-
-    //}
   }
 
   abstract class Object3d
@@ -630,17 +626,57 @@ namespace wp
       faces[4] = new Face(points_list[1], points_list[5], points_list[6], points_list[2]);
       faces[5] = new Face(points_list[0], points_list[4], points_list[7], points_list[3]);
     }
-
-
-
-
   }
 
   class Cylinder : Object3d
   {
-    Cylinder(int x, int y, int z, int h, double r)
-    {
+    Circle upper, bottom;
+    Face face;
+    Line first, second;
 
+    public Cylinder(int x, int y, int z, int h, double r)
+    {
+      int size = 24;
+      faces = new Poly[3];
+      lines = new List<Line>();
+      points = new List<Point3d>();
+
+      List<Point3d> upper_circle, bottom_circle;
+      upper_circle = new List<Point3d>(size);
+      bottom_circle = new List<Point3d>(size);
+
+      //
+      Func<double, int, (int, int, int)> get_cord = (alpha, height) => (x + (int)(r * Math.Cos(alpha)), y + height, z + (int)(r * Math.Sin(alpha)));
+
+      double full_circle = 2 * Math.PI;
+      double section = full_circle / size;
+      for(int i  = 0; i < size; ++i)
+      {
+        var (x1, y1, z1) = get_cord(section * i, h);
+        var (x0, y0, z0) = get_cord(section * i, 0);
+        upper_circle.Add(new Point3d(x1, y1, z1));
+        bottom_circle.Add(new Point3d(x0, y0, z0));
+      }
+
+      for (int i = 0; i < size; ++i)
+      {
+        lines.Add(new Line(bottom_circle[(i)%size], bottom_circle[(i+1)%size]));
+      }
+
+      for (int i = 0; i < size; ++i)
+      {
+        lines.Add(new Line(upper_circle[(i) % size], upper_circle[(i + 1) % size]));
+      }
+      first = new Line(bottom_circle[0], upper_circle[0]);
+      second = new Line(upper_circle[size / 2], bottom_circle[size / 2]);
+      lines.Add(first);
+      lines.Add(second);
+      points.AddRange(bottom_circle);
+      points.AddRange(upper_circle);
+
+      faces[0] = new Face(bottom_circle[0], upper_circle[0], upper_circle[size / 2], bottom_circle[size / 2]);
+      faces[1] = upper = new Circle(upper_circle);
+      faces[2] = bottom = new Circle(bottom_circle);
     }
 
 

@@ -79,7 +79,7 @@ namespace wp
       for (int i = 0; i < 4; ++i)
       {
         for (int j = 0; j < 4; ++j)
-          res[i] += mat[i, j] * xyz[j];
+          res[i] += mat[j, i] * xyz[j];
       }
 
       xyz = res.Select(i => (int)i).ToArray();
@@ -368,7 +368,7 @@ namespace wp
           inter_points[0].z = z_line1;
           inter_points[1].z = z_line2;
 
-          if (z_line1 < z1 && z_line2 < z2)
+          if (z_line1 <= z1 && z_line2 <= z2)
           {
             res.Add(line);
             return res;
@@ -449,7 +449,7 @@ namespace wp
             return res;
           }
         }
-        //throw new Exception("a");
+        //throw new Exception("1 point");
       }
 
       return res;
@@ -531,7 +531,7 @@ namespace wp
     protected Poly[] faces;
     protected List<Point3d> points;
     protected List<Line> lines;
-    public void transform(Matrix mat)
+    public virtual void transform(Matrix mat)
     {
       points.ForEach(p => p.transform(mat));
     }
@@ -630,9 +630,7 @@ namespace wp
 
   class Cylinder : Object3d
   {
-    Circle upper, bottom;
-    Face face;
-    Line first, second;
+    List<Point3d> upper, bottom;
 
     public Cylinder(int x, int y, int z, int h, double r)
     {
@@ -657,6 +655,8 @@ namespace wp
         upper_circle.Add(new Point3d(x1, y1, z1));
         bottom_circle.Add(new Point3d(x0, y0, z0));
       }
+      upper = upper_circle;
+      bottom = bottom_circle;
 
       for (int i = 0; i < size; ++i)
       {
@@ -667,22 +667,47 @@ namespace wp
       {
         lines.Add(new Line(upper_circle[(i) % size], upper_circle[(i + 1) % size]));
       }
-      first = new Line(bottom_circle[0], upper_circle[0]);
-      second = new Line(upper_circle[size / 2], bottom_circle[size / 2]);
-      lines.Add(first);
-      lines.Add(second);
+      lines.Add(new Line(bottom_circle[0], upper_circle[0]));
+      lines.Add(new Line(upper_circle[size / 2], bottom_circle[size / 2]));
       points.AddRange(bottom_circle);
       points.AddRange(upper_circle);
 
       faces[0] = new Face(bottom_circle[0], upper_circle[0], upper_circle[size / 2], bottom_circle[size / 2]);
-      faces[1] = upper = new Circle(upper_circle);
-      faces[2] = bottom = new Circle(bottom_circle);
+      faces[1] = new Circle(upper_circle);
+      faces[2] = new Circle(bottom_circle);
     }
 
 
-    new public void transform(Matrix mat)
+    public override void transform(Matrix mat)
     {
       points.ForEach(p => p.transform(mat));
+      Func<Point3d, Point3d, Point3d, int> func = (st, v1, v2) =>
+      {
+        int vx1 = v1.x - st.x, vy1 = v1.y - st.y, vx2 = v2.x - st.x, vy2 = v2.y - st.y;
+
+        int z = (vx1 * vy2 - vx2 * vy1);
+        return Math.Abs(z);
+      };
+
+      int size = upper.Count;
+      int index = 0;
+      int S = 0;
+      for (int i = 0; i < size/2; ++i)
+      {
+        Point3d start = bottom[i], v1 = upper[i], v2 = bottom[i + size / 2];
+        if(func(start, v1, v2) > S )
+        {
+          S = func(start, v1, v2);
+          index = i;
+        }
+      }
+
+      faces[0] = new Face(bottom[index], upper[index], upper[index + size / 2], bottom[index + size / 2]);
+
+
+      lines[lines.Count - 2] = new Line(bottom[index], upper[index]);
+      lines[lines.Count - 1] = new Line(bottom[index + size / 2], upper[index + size / 2]);
+
       //Todo
     }
   }
